@@ -77,6 +77,7 @@ ENABLE_MAILBOX # if "true" will enable mailbox plugin
 ENABLE_CLEANER # if "true" will enable message db cleaner plugin
 ENABLE_MONITOR # if "true" will enable message db monitor plugin
 ENABLE_RATELIMITER # if "true" will enable the ratelimiter plugin
+ENABLE_CREDSTORE # if "true" will enable the credentialstore plugin
 LOGGER_LEVEL # defaults to 'info', can be 'debug','verbose','error', etc.
 ENABLE_HTTPS # if "true" it will server using SSL/HTTPS
 
