@@ -73,6 +73,7 @@
     "preconditions": "^1.0.7",
     "socket.io": "1.0.6",
     "socket.io-client": "1.0.6",
+    "socket.io-stream": "^0.5.3",
     "soop": "=0.1.5",
     "winston": "*",
     "xmlhttprequest": "~1.6.0"

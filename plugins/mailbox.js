@@ -5,12 +5,14 @@ var logger = require('../lib/logger').logger;
 var preconditions = require('preconditions').singleton();
 var foxtrot = require('foxtrot');
 var Key = bitcore.Key;
+var ss = require('socket.io-stream');
 
 var io;
 module.exports.init = function(ext_io, config) {
   logger.info('Using mailbox plugin');
   preconditions.checkArgument(ext_io);
   io = ext_io;
+  ss(io);
 
   foxtrot.options = config.foxtrot;
   foxtrot.on('peerConnect', function(peer) {
@@ -21,7 +23,7 @@ module.exports.init = function(ext_io, config) {
   });
 
   var identity = Key.generateSync();
-  if (config.identity) {
+  if (config.identity && !process.env.RANDOM_ID) {
     identity.private = new Buffer(config.identity, 'hex');
     identity.regenerateSync();
   }
@@ -33,31 +35,45 @@ module.exports.init = function(ext_io, config) {
   console.log('>>> foxtrot server listening on ' + identity.public.toString('hex'));
 
   server.on('connect', function(socket) {
-    socket.nick = null;
-    socket.clientNumber = chatClients.length;
-    chatClients.push(socket);
+    // other insight server connecting to us via foxtrot
+    console.log('other insight server connecting to us via foxtrot');
+    socket.pipe(process.stdout);
     socket.on('data', function(data) {
-      if (!socket.nick) {
-        socket.nick = data.toString();;
-        for (var i = 0; i < chatClients.length; i++) {
-          var chatClient = chatClients[i];
-          if ((chatClient !== socket) && (chatClient.nick == socket.nick)) {
-            chatClients.splice(chatClient.clientNumber, 1);
-            socket.end('>>> that nickname is already taken\n');
-            return;
-          }
-        }
-        var announcement = '>>> ' + socket.nick + ' has joined the conversation\n';
-        sendToEveryone(announcement, socket);
-      } else {
-        sendToEveryone(socket.nick + '> ' + data, socket);
-      }
+      console.log('data on foxtrot');
     });
     socket.on('close', function() {
-      chatClients.splice(socket.clientNumber, 1);
+      console.log('close on foxtrot');
     });
   });
 
+  io.use(function(socket, next) {
+    var q = socket.request._query;
+    if (q.foxtrot && identity.public.toString('hex') !== q.foxtrot) {
+      console.log('overriding emits and ons for ' + socket.id + ' to proxy to ' + q.foxtrot);
+      var client = foxtrot.connect({
+        address: new Buffer(q.foxtrot, 'hex')
+      }, function() { // on connected
+        console.log('>>> connected to other insight server: ' + q.foxtrot);
+      });
+      client.on('error', function(err) {
+        console.error(err);
+        //foxtrot.stop();
+      });
+      var emit = socket.emit;
+      socket.emit = function() {
+        console.log('***', 'emit', Array.prototype.slice.call(arguments));
+        client.write(JSON.stringify(arguments));
+      };
+      var x = socket.$emit;
+      socket.$emit = function() {
+        var event = arguments[0];
+        var feed = arguments[1];
+        console.log('*** on ' + event + ":" + feed);
+        x.apply(this, Array.prototype.slice.call(arguments));
+      };
+    }
+    next();
+  });
 
   io.sockets.on('connection', function(socket) {
     // when it requests sync, send him all pending messages

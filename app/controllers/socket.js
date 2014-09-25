@@ -13,6 +13,7 @@ module.exports.init = function(io_ext) {
       logger.verbose('New connection from ' + socket.id);
       // when it subscribes, make it join the according room
       socket.on('subscribe', function(topic) {
+        console.log('asdasdasd ' +topic );
         logger.debug('subscribe to ' + topic);
         socket.join(topic);
         socket.emit('subscribed');
