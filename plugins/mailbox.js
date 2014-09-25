@@ -6,6 +6,7 @@ var preconditions = require('preconditions').singleton();
 var foxtrot = require('foxtrot');
 var Key = bitcore.Key;
 var ss = require('socket.io-stream');
+var router = require('socket.io-events')();
 
 var io;
 module.exports.init = function(ext_io, config) {
@@ -13,6 +14,9 @@ module.exports.init = function(ext_io, config) {
   preconditions.checkArgument(ext_io);
   io = ext_io;
   ss(io);
+
+  var peers = {};
+  var socket2foxtrot = {};
 
   foxtrot.options = config.foxtrot;
   foxtrot.on('peerConnect', function(peer) {
@@ -46,10 +50,25 @@ module.exports.init = function(ext_io, config) {
     });
   });
 
+
+  router.on('*', function(sock, args, next) {
+    console.log(sock.id+' on ' + args[0]);
+    var id = sock.id;
+    var fID = socket2foxtrot[id];
+    var peer = peers[fID];
+    if (fID && peer) {
+      console.log('redirecting ' + args + ' to ' + peer);
+      peer.write(JSON.stringify(args));
+      sock.emit(args.shift(), args);
+    }
+    next();
+  });
+  io.use(router);
+
   io.use(function(socket, next) {
     var q = socket.request._query;
-    if (q.foxtrot && identity.public.toString('hex') !== q.foxtrot) {
-      console.log('overriding emits and ons for ' + socket.id + ' to proxy to ' + q.foxtrot);
+    if (q.foxtrot && identity.public.toString('hex') !== q.foxtrot && !peers[q.foxtrot]) {
+      console.log('overriding emits and handlers for ' + socket.id + ' to proxy to ' + q.foxtrot);
       var client = foxtrot.connect({
         address: new Buffer(q.foxtrot, 'hex')
       }, function() { // on connected
@@ -59,23 +78,16 @@ module.exports.init = function(ext_io, config) {
         console.error(err);
         //foxtrot.stop();
       });
-      var emit = socket.emit;
-      socket.emit = function() {
-        console.log('***', 'emit', Array.prototype.slice.call(arguments));
-        client.write(JSON.stringify(arguments));
-      };
-      var x = socket.$emit;
-      socket.$emit = function() {
-        var event = arguments[0];
-        var feed = arguments[1];
-        console.log('*** on ' + event + ":" + feed);
-        x.apply(this, Array.prototype.slice.call(arguments));
-      };
+      peers[q.foxtrot] = client;
+      socket2foxtrot[socket.id] = q.foxtrot;
     }
     next();
   });
 
   io.sockets.on('connection', function(socket) {
+    socket.on('ping', function() {
+      socket.emit('pong', Math.floor(Math.random() * 10 % 10));
+    });
     // when it requests sync, send him all pending messages
     socket.on('sync', function(ts) {
       logger.verbose('Sync requested by ' + socket.id);
