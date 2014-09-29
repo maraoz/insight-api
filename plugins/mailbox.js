@@ -41,9 +41,8 @@ module.exports.init = function(ext_io, config) {
   server.on('connect', function(socket) {
     // other insight server connecting to us via foxtrot
     console.log('other insight server connecting to us via foxtrot');
-    socket.pipe(process.stdout);
     socket.on('data', function(data) {
-      console.log('data on foxtrot');
+      console.log('data on foxtrot '+data);
     });
     socket.on('close', function() {
       console.log('close on foxtrot');
@@ -52,16 +51,15 @@ module.exports.init = function(ext_io, config) {
 
 
   router.on('*', function(sock, args, next) {
-    console.log(sock.id+' on ' + args[0]);
-    var id = sock.id;
-    var fID = socket2foxtrot[id];
+    var fID = socket2foxtrot[sock.id];
     var peer = peers[fID];
     if (fID && peer) {
-      console.log('redirecting ' + args + ' to ' + peer);
+      console.log('redirecting ' + args[0] + ' to ' + fID);
       peer.write(JSON.stringify(args));
       sock.emit(args.shift(), args);
+    } else {
+      next();
     }
-    next();
   });
   io.use(router);
 
@@ -86,7 +84,7 @@ module.exports.init = function(ext_io, config) {
 
   io.sockets.on('connection', function(socket) {
     socket.on('ping', function() {
-      socket.emit('pong', Math.floor(Math.random() * 10 % 10));
+      socket.emit('pong', process.env.INSIGHT_PORT);
     });
     // when it requests sync, send him all pending messages
     socket.on('sync', function(ts) {
