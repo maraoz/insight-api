@@ -20,14 +20,15 @@ module.exports.init = function(ext_io, config) {
 
   foxtrot.options = config.foxtrot;
   foxtrot.on('peerConnect', function(peer) {
-    console.log('>>> connected to peer (' + peer.descriptorString() + ')');
+    //console.log('>>> connected to peer (' + peer.descriptorString() + ')');
   });
   foxtrot.on('peerDisconnect', function(peer) {
-    console.log('>>> disconnected from peer (' + peer.descriptorString() + ')');
+    //console.log('>>> disconnected from peer (' + peer.descriptorString() + ')');
   });
 
   var onPing = function() {
     var socket = this.sock;
+    console.log('RESPONDING PONG');
     socket.emit('pong', process.env.INSIGHT_PORT);
   };
 
@@ -100,10 +101,11 @@ module.exports.init = function(ext_io, config) {
     // other insight server connecting to us via foxtrot
     console.log('other insight server connecting to us via foxtrot');
     socket.on('data', function(data) {
-      console.log('data on foxtrot ' + data);
-      var e = data[0];
+      data = JSON.parse(data.toString())
       console.log(typeof data);
-      var data = data.shift();
+      console.dir(data);
+      console.log(JSON.stringify(data));
+      var e = data.shift();
       handlers[e](data);
     });
     socket.on('close', function() {
@@ -118,7 +120,7 @@ module.exports.init = function(ext_io, config) {
     if (fID && peer) {
       console.log('redirecting ' + args[0] + ' to ' + fID);
       peer.write(JSON.stringify(args));
-      sock.emit(args.shift(), args);
+      sock.emit(args.shift(), args); // consume event, don't remove
     } else if (fID) {
       console.log('foxtrot tunnel not found');
       sock.emit('foxtrot-error', 'not found');
@@ -138,12 +140,12 @@ module.exports.init = function(ext_io, config) {
         address: new Buffer(q.foxtrot, 'hex')
       }, function() { // on connected
         console.log('>>> connected to other insight server: ' + q.foxtrot);
-        peers[q.foxtrot] = client;
       });
       client.on('error', function(err) {
         console.log('Could not find foxtrot peer ' + q.foxtrot);
       });
       socket2foxtrot[socket.id] = q.foxtrot;
+      peers[q.foxtrot] = client;
     }
     next();
   });
