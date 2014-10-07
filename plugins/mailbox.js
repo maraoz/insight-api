@@ -7,6 +7,10 @@ var foxtrot = require('foxtrot');
 var Key = bitcore.Key;
 var ss = require('socket.io-stream');
 var router = require('socket.io-events')();
+var client = require('socket.io-client')('localhost');
+client.on('error', function(x) {
+  alert(x);
+});
 
 var io;
 module.exports.init = function(ext_io, config) {
@@ -102,22 +106,47 @@ module.exports.init = function(ext_io, config) {
     console.log('other insight server connecting to us via foxtrot');
     socket.on('data', function(data) {
       data = JSON.parse(data.toString())
-      console.log(typeof data);
-      console.dir(data);
-      console.log(JSON.stringify(data));
+      console.log('receiving data through foxtrot: ' + data[0]);
       var e = data.shift();
-      handlers[e](data);
+      client.emit(e, data);
     });
     socket.on('close', function() {
       console.log('close on foxtrot');
     });
   });
 
+  io.use(function(socket, next) {
+    var q = socket.request._query;
+    console.log('setter of proxy for ' + socket.id);
+    if (q.foxtrot &&
+      identity.public.toString('hex') !== q.foxtrot) {
+      console.log('overriding emits and handlers for ' + socket.id + ' to proxy to ' + q.foxtrot);
+      var client = foxtrot.connect({
+        address: new Buffer(q.foxtrot, 'hex')
+      }, function() { // on connected
+        console.log('connected to other insight server: ' + q.foxtrot);
+        peers[q.foxtrot] = client;
+      });
+      client.on('error', function(err) {
+        peers[q.foxtrot] = undefined;
+        console.log('Could not find foxtrot peer ' + q.foxtrot);
+      });
+      peers[q.foxtrot] = 'pending';
+      socket2foxtrot[socket.id] = q.foxtrot;
+    }
+    next();
+  });
 
   router.on('*', function(sock, args, next) {
     var fID = socket2foxtrot[sock.id];
     var peer = peers[fID];
+    console.log('routing ' + sock.id);
+    console.log(socket2foxtrot);
     if (fID && peer) {
+      if (fID === 'pending') {
+        sock.emit('pending');
+        return;
+      }
       console.log('redirecting ' + args[0] + ' to ' + fID);
       peer.write(JSON.stringify(args));
       sock.emit(args.shift(), args); // consume event, don't remove
@@ -125,38 +154,16 @@ module.exports.init = function(ext_io, config) {
       console.log('foxtrot tunnel not found');
       sock.emit('foxtrot-error', 'not found');
     } else {
-      next();
+      //next();
     }
   });
   io.use(router);
 
-  io.use(function(socket, next) {
-    var q = socket.request._query;
-    if (q.foxtrot &&
-      identity.public.toString('hex') !== q.foxtrot &&
-      !peers[q.foxtrot]) {
-      console.log('overriding emits and handlers for ' + socket.id + ' to proxy to ' + q.foxtrot);
-      var client = foxtrot.connect({
-        address: new Buffer(q.foxtrot, 'hex')
-      }, function() { // on connected
-        console.log('>>> connected to other insight server: ' + q.foxtrot);
-      });
-      client.on('error', function(err) {
-        console.log('Could not find foxtrot peer ' + q.foxtrot);
-      });
-      socket2foxtrot[socket.id] = q.foxtrot;
-      peers[q.foxtrot] = client;
-    }
-    next();
-  });
 
   io.sockets.on('connection', function(socket) {
     socket.on('ping', onPing);
-
     socket.on('sync', onSync);
-
     socket.on('message', onMessage);
-
   });
 
   mdb.on('message', broadcastMessage);

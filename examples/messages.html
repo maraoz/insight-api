@@ -57,12 +57,14 @@
   <script src="http://code.jquery.com/jquery-1.11.1.js"></script>
   <script src="./bitcore.js"></script>
   <script>
-    var fixedPK = prompt('Enter your private key or leave empty to generate one', 'a52e54d90c1ff4846e6f164e56405094cc96ecc0ea7732831e24418204c8ab55');
+    var fixedPK = 'a52e54d90c1ff4846e6f164e56405094cc96ecc0ea7732831e24418204c8ab55'// WAS: prompt('Enter your private key or leave empty to generate one', 'a52e54d90c1ff4846e6f164e56405094cc96ecc0ea7732831e24418204c8ab55');
 
     $(document).ready(function()
     {
       // load dependencies 
-      var socket = io('http://localhost:3001');
+      var socket = io('http://localhost:6001', {
+        query: 'foxtrot=03daf1b48965d54ea3206a28dc7e993fceebe0fb0d0ce258ed146baa64ee95e4ce',  
+      });
       var bitcore = require('bitcore');
       var util = bitcore.util;
       var Key = bitcore.Key;
@@ -102,10 +104,12 @@
         return;
       });
 
+
+      socket.emit('ping');
       // receive chat handler
-      socket.emit('subscribe', pubkey);
+      //socket.emit('subscribe', pubkey);
       var ts = undefined; // timestamp to sync, undefined syncs all
-      socket.emit('sync', ts);
+      //socket.emit('sync', ts);
       socket.on('message', function(msg)
       {
         try {
@@ -114,6 +118,12 @@
           alert(e);
         }
         show(msg.pubkey, data.payload);
+      });
+      socket.on('pong', function(x) {
+        alert('pong '+x);
+      });
+      socket.on('pending', function() {
+        alert('pending');
       });
     });
   </script>
