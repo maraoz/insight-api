@@ -6,11 +6,11 @@ var preconditions = require('preconditions').singleton();
 var foxtrot = require('foxtrot');
 var Key = bitcore.Key;
 var ss = require('socket.io-stream');
-var router = require('socket.io-events')();
-var client = require('socket.io-client')('localhost');
-client.on('error', function(x) {
-  alert(x);
-});
+var Router = require('socket.io-events');
+var SocketClient = require('socket.io-client');
+
+var router = Router();
+var clientRouter = Router();
 
 var io;
 module.exports.init = function(ext_io, config) {
@@ -108,12 +108,26 @@ module.exports.init = function(ext_io, config) {
       data = JSON.parse(data.toString())
       console.log('receiving data through foxtrot: ' + data[0]);
       var e = data.shift();
-      client.emit(e, data);
+      selfClient.emit(e, data);
+      selfClient.on('pong', function(x) {
+        console.log('received pong!');
+        socket.write(JSON.stringify(['pong', x]));
+      });
     });
     socket.on('close', function() {
       console.log('close on foxtrot');
     });
   });
+
+  var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT);
+
+  var x = selfClient.$emit;
+  selfClient.$emit = function() {
+    var event = arguments[0];
+    var feed = arguments[1];
+    console.log(event + "::::::::::::::::" + feed);
+    x.apply(this, Array.prototype.slice.call(arguments));
+  };
 
   io.use(function(socket, next) {
     var q = socket.request._query;
@@ -121,17 +135,26 @@ module.exports.init = function(ext_io, config) {
     if (q.foxtrot &&
       identity.public.toString('hex') !== q.foxtrot) {
       console.log('overriding emits and handlers for ' + socket.id + ' to proxy to ' + q.foxtrot);
-      var client = foxtrot.connect({
-        address: new Buffer(q.foxtrot, 'hex')
-      }, function() { // on connected
-        console.log('connected to other insight server: ' + q.foxtrot);
-        peers[q.foxtrot] = client;
-      });
-      client.on('error', function(err) {
-        peers[q.foxtrot] = undefined;
-        console.log('Could not find foxtrot peer ' + q.foxtrot);
-      });
-      peers[q.foxtrot] = 'pending';
+      if (!peers[q.foxtrot]) {
+        var client = foxtrot.connect({
+          address: new Buffer(q.foxtrot, 'hex')
+        }, function() { // on connected
+          console.log('connected to other insight server: ' + q.foxtrot);
+          peers[q.foxtrot] = client;
+        });
+        client.on('error', function(err) {
+          peers[q.foxtrot] = undefined;
+          console.log('Could not find foxtrot peer ' + q.foxtrot);
+        });
+        client.on('data', function(data) {
+          data = JSON.parse(data);
+          var e = data.shift();
+          console.log('before emit to socket ' + socket.id + ' event ' + e + ' data: ' + data);
+          socket.emit(e, data);
+        });
+
+        peers[q.foxtrot] = 'pending';
+      }
       socket2foxtrot[socket.id] = q.foxtrot;
     }
     next();
@@ -140,10 +163,8 @@ module.exports.init = function(ext_io, config) {
   router.on('*', function(sock, args, next) {
     var fID = socket2foxtrot[sock.id];
     var peer = peers[fID];
-    console.log('routing ' + sock.id);
-    console.log(socket2foxtrot);
     if (fID && peer) {
-      if (fID === 'pending') {
+      if (peer === 'pending') {
         sock.emit('pending');
         return;
       }
@@ -154,12 +175,11 @@ module.exports.init = function(ext_io, config) {
       console.log('foxtrot tunnel not found');
       sock.emit('foxtrot-error', 'not found');
     } else {
-      //next();
+      next();
     }
   });
+
   io.use(router);
-
-
   io.sockets.on('connection', function(socket) {
     socket.on('ping', onPing);
     socket.on('sync', onSync);
