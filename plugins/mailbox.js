@@ -101,26 +101,29 @@ module.exports.init = function(ext_io, config) {
   });
   console.log('>>> foxtrot server listening on ' + identity.public.toString('hex'));
 
+  // other insight server connecting to us via foxtrot
   server.on('connect', function(socket) {
-    // other insight server connecting to us via foxtrot
     console.log('other insight server connecting to us via foxtrot');
+
+    // when receiving data, handle it with socket.io server
     socket.on('data', function(data) {
       data = JSON.parse(data.toString())
       console.log('receiving data through foxtrot: ' + data[0]);
       var e = data.shift();
       selfClient.emit(e, data);
-      selfClient.on('pong', function(x) {
-        console.log('received pong!');
-        socket.write(JSON.stringify(['pong', x]));
-      });
     });
     socket.on('close', function() {
       console.log('close on foxtrot');
     });
+
+    // route back responses through foxtrot
+    selfClient.on('pong', function(x) {
+      console.log('received pong!');
+      socket.write(JSON.stringify(['pong', x]));
+    });
   });
 
   var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT);
-
   var x = selfClient.$emit;
   selfClient.$emit = function() {
     var event = arguments[0];
@@ -144,8 +147,15 @@ module.exports.init = function(ext_io, config) {
           peers[tunnelID] = client;
         });
         client.on('error', function(err) {
-          peers[tunnelID] = undefined;
           console.log('Could not find foxtrot peer ' + q.foxtrot);
+          peers[tunnelID] = undefined;
+          socket.disconnect();
+        });
+        client.on('close', function() {
+          // if foxtrot tunnel closes, close connection to socket client
+          console.log('Foxtrot tunnel closed to ' + q.foxtrot);
+          peers[tunnelID] = undefined;
+          socket.disconnect();
         });
         peers[tunnelID] = client;
       }
@@ -156,6 +166,11 @@ module.exports.init = function(ext_io, config) {
         socket.emit(e, data);
       });
       socket2foxtrot[socket.id] = tunnelID;
+      socket.on('disconnect', function() {
+        // if socket connection to client is lost, close foxtrot tunnel
+        console.log('client socket disconnected');
+        //client.end();
+      });
     }
     next();
   });
