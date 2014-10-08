@@ -104,8 +104,9 @@
         return;
       });
 
-
-      socket.emit('ping');
+      socket.on('foxtrot ready', function() {
+        socket.emit('ping');
+      });
       // receive chat handler
       //socket.emit('subscribe', pubkey);
       var ts = undefined; // timestamp to sync, undefined syncs all

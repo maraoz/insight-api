@@ -105,6 +105,14 @@ module.exports.init = function(ext_io, config) {
   server.on('connect', function(socket) {
     console.log('other insight server connecting to us via foxtrot');
 
+    var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT);
+    var x = selfClient.$emit;
+    selfClient.$emit = function() {
+      var event = arguments[0];
+      var feed = arguments[1];
+      console.log(event + "::::::::::::::::" + feed);
+      x.apply(this, Array.prototype.slice.call(arguments));
+    };
     // when receiving data, handle it with socket.io server
     socket.on('data', function(data) {
       data = JSON.parse(data.toString())
@@ -123,14 +131,6 @@ module.exports.init = function(ext_io, config) {
     });
   });
 
-  var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT);
-  var x = selfClient.$emit;
-  selfClient.$emit = function() {
-    var event = arguments[0];
-    var feed = arguments[1];
-    console.log(event + "::::::::::::::::" + feed);
-    x.apply(this, Array.prototype.slice.call(arguments));
-  };
 
   io.use(function(socket, next) {
     var q = socket.request._query;
@@ -145,6 +145,7 @@ module.exports.init = function(ext_io, config) {
         }, function() { // on connected
           console.log('connected to other insight server: ' + q.foxtrot);
           peers[tunnelID] = client;
+          socket.emit('foxtrot ready');
         });
         client.on('error', function(err) {
           console.log('Could not find foxtrot peer ' + q.foxtrot);
