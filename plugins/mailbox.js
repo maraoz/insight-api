@@ -105,7 +105,9 @@ module.exports.init = function(ext_io, config) {
   server.on('connect', function(socket) {
     console.log('other insight server connecting to us via foxtrot');
 
-    var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT);
+    var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT, {
+      multiplex: false
+    });
     var x = selfClient.$emit;
     selfClient.$emit = function() {
       var event = arguments[0];
@@ -122,6 +124,7 @@ module.exports.init = function(ext_io, config) {
     });
     socket.on('close', function() {
       console.log('close on foxtrot');
+      selfClient.close();
     });
 
     // route back responses through foxtrot
