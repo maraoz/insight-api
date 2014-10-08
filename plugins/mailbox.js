@@ -123,8 +123,13 @@ module.exports.init = function(ext_io, config) {
       selfClient.emit(e, data);
     });
     socket.on('close', function() {
-      console.log('close on foxtrot');
+      console.log('Foxtrot tunnel closed, closing socket.io self-connection');
       selfClient.close();
+    });
+
+    selfClient.on('disconnect', function() {
+      console.log('Self-connection to socket.io closed, closing foxtrot tunnel');
+      socket.end();
     });
 
     // route back responses through foxtrot
@@ -172,8 +177,8 @@ module.exports.init = function(ext_io, config) {
       socket2foxtrot[socket.id] = tunnelID;
       socket.on('disconnect', function() {
         // if socket connection to client is lost, close foxtrot tunnel
-        console.log('client socket disconnected');
-        //client.end();
+        console.log('Client socket ' + socket.id + ' disconnected');
+        client.end();
       });
     }
     next();
