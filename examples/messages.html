@@ -105,9 +105,21 @@
       });
 
       socket.on('foxtrot ready', function() {
+        socket.on('subscribed', function(){
+          console.log('subscribed to pubkey: '+pubkey);
+          socket.emit('sync', ts);
+        });
+        socket.on('insight-error', function(err) {
+          console.log('insight error: '+err);
+        });
+        socket.on('no messages', function() {
+          console.log('no messages found!');
+        });
         socket.emit('ping');
-        //socket.emit('subscribe', pubkey);
-        //socket.emit('sync', ts);
+        socket.emit('subscribe', pubkey);
+      });
+      socket.on('disconnect', function(){
+        alert('disconnect');
       });
       // receive chat handler
       var ts = undefined; // timestamp to sync, undefined syncs all

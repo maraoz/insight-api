@@ -54,6 +54,7 @@ module.exports.init = function(ext_io, config) {
     socket.emit('foxtrot', identity.public.toString('hex'));
 
     var to = rooms[1];
+    console.log('TOOOOOOOOOOOOOOOOOO ' + JSON.stringify(to));
     var upper_ts = Math.round(microtime.now());
     logger.debug('    to timestamp ' + upper_ts);
     mdb.getMessages(to, ts, upper_ts, function(err, messages) {
@@ -105,30 +106,29 @@ module.exports.init = function(ext_io, config) {
   server.on('connect', function(socket) {
     console.log('other insight server connecting to us via foxtrot');
 
-    var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT, {
+    var socketProxy = SocketClient('http://localhost:' + process.env.INSIGHT_PORT, {
       multiplex: false
     });
 
     // when receiving data, handle it with socket.io server
     socket.on('data', function(data) {
       data = JSON.parse(data.toString())
-      console.log('receiving data through foxtrot: ' + data[0]);
-      var e = data.shift();
-      selfClient.emit(e, data);
+      console.log('receiving data through foxtrot: ' + JSON.stringify(data));
+      socketProxy.emit.apply(socketProxy, data);
     });
     socket.on('close', function() {
       console.log('Foxtrot tunnel closed, closing socket.io self-connection');
-      selfClient.close();
+      socketProxy.close();
     });
 
-    selfClient.on('disconnect', function() {
+    socketProxy.on('disconnect', function() {
       console.log('Self-connection to socket.io closed, closing foxtrot tunnel');
       socket.end();
     });
 
     // route back responses through foxtrot
-    var x = selfClient.onevent;
-    selfClient.onevent = function() {
+    var x = socketProxy.onevent;
+    socketProxy.onevent = function() {
       var args2 = arguments[0].data;
       console.log('socket.io server response! ' + JSON.stringify(args2));
       socket.write(JSON.stringify(args2));

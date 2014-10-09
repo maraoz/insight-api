@@ -22,7 +22,6 @@ module.exports.init = function(io_ext) {
       socket.on('disconnect', function() {
         logger.verbose('disconnected ' + socket.id);
       });
-
     });
   }
   return ios;
