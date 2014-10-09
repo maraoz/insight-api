@@ -106,11 +106,11 @@
 
       socket.on('foxtrot ready', function() {
         socket.emit('ping');
+        //socket.emit('subscribe', pubkey);
+        //socket.emit('sync', ts);
       });
       // receive chat handler
-      //socket.emit('subscribe', pubkey);
       var ts = undefined; // timestamp to sync, undefined syncs all
-      //socket.emit('sync', ts);
       socket.on('message', function(msg)
       {
         try {
@@ -121,7 +121,7 @@
         show(msg.pubkey, data.payload);
       });
       socket.on('pong', function(x) {
-        alert('pong '+x);
+        console.log('pong '+x);
       });
     });
   </script>

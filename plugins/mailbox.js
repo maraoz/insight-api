@@ -108,13 +108,7 @@ module.exports.init = function(ext_io, config) {
     var selfClient = SocketClient('http://localhost:' + process.env.INSIGHT_PORT, {
       multiplex: false
     });
-    var x = selfClient.$emit;
-    selfClient.$emit = function() {
-      var event = arguments[0];
-      var feed = arguments[1];
-      console.log(event + "::::::::::::::::" + feed);
-      x.apply(this, Array.prototype.slice.call(arguments));
-    };
+
     // when receiving data, handle it with socket.io server
     socket.on('data', function(data) {
       data = JSON.parse(data.toString())
@@ -133,10 +127,13 @@ module.exports.init = function(ext_io, config) {
     });
 
     // route back responses through foxtrot
-    selfClient.on('pong', function(x) {
-      console.log('received pong!');
-      socket.write(JSON.stringify(['pong', x]));
-    });
+    var x = selfClient.onevent;
+    selfClient.onevent = function() {
+      var args2 = arguments[0].data;
+      console.log('socket.io server response! ' + JSON.stringify(args2));
+      socket.write(JSON.stringify(args2));
+      x.apply(this, Array.prototype.slice.call(arguments));
+    };
   });
 
 
